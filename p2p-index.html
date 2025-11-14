@@ -1,0 +1,975 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Party Stream - P2P Video Sync</title>
+    <!-- PeerJS CDN -->
+    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+    <!-- Google Cast SDK - Only loads on HTTPS (disabled for file:// protocol) -->
+    <script>
+        if (window.location.protocol === 'https:') {
+            const castScript = document.createElement('script');
+            castScript.src = 'https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1';
+            document.head.appendChild(castScript);
+        }
+    </script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            max-width: 1200px;
+            width: 100%;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+
+        h1 {
+            text-align: center;
+            color: #667eea;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+        }
+
+        .connection-section {
+            background: #f7f9fc;
+            padding: 20px;
+            border-radius: 15px;
+            margin-bottom: 30px;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: bold;
+            margin-bottom: 15px;
+        }
+
+        .status-badge.connected {
+            background: #4caf50;
+            color: white;
+        }
+
+        .status-badge.disconnected {
+            background: #f44336;
+            color: white;
+        }
+
+        .status-badge.waiting {
+            background: #ff9800;
+            color: white;
+        }
+
+        .input-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        input[type="text"], input[type="url"] {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+
+        input[type="text"]:focus, input[type="url"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .btn-secondary {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+
+        .btn-small {
+            padding: 8px 20px;
+            font-size: 14px;
+        }
+
+        .video-container {
+            position: relative;
+            width: 100%;
+            background: #000;
+            border-radius: 15px;
+            overflow: hidden;
+            margin-bottom: 20px;
+        }
+
+        video {
+            width: 100%;
+            display: block;
+        }
+
+        .video-controls {
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            border-radius: 15px;
+            margin-bottom: 20px;
+        }
+
+        .video-controls button {
+            margin-right: 10px;
+        }
+
+        .chat-container {
+            background: #f7f9fc;
+            border-radius: 15px;
+            padding: 20px;
+            height: 400px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            margin-bottom: 15px;
+            padding: 10px;
+            background: white;
+            border-radius: 10px;
+        }
+
+        .message {
+            margin-bottom: 12px;
+            padding: 10px;
+            border-radius: 8px;
+            background: #e3f2fd;
+        }
+
+        .message.own {
+            background: #c5e1a5;
+            text-align: right;
+        }
+
+        .message .username {
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 3px;
+        }
+
+        .message .timestamp {
+            font-size: 11px;
+            color: #999;
+            margin-left: 8px;
+        }
+
+        .chat-input-group {
+            display: flex;
+            gap: 10px;
+        }
+
+        .chat-input-group input {
+            flex: 1;
+        }
+
+        .peers-list {
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 15px;
+        }
+
+        .peer-item {
+            padding: 10px;
+            border-bottom: 1px solid #e0e0e0;
+            display: flex;
+            align-items: center;
+        }
+
+        .peer-item:last-child {
+            border-bottom: none;
+        }
+
+        .peer-status {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #4caf50;
+            margin-right: 10px;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .copy-notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #4caf50;
+            color: white;
+            padding: 15px 25px;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+            display: none;
+            z-index: 1000;
+        }
+
+        .copy-notification.show {
+            display: block;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .grid-layout {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 20px;
+            margin-top: 30px;
+        }
+
+        @media (max-width: 768px) {
+            .grid-layout {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .cast-button-container {
+            margin-top: 15px;
+        }
+
+        #room-link-display {
+            background: #e3f2fd;
+            padding: 10px;
+            border-radius: 8px;
+            margin-top: 10px;
+            font-family: monospace;
+            word-break: break-all;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎬 Party Stream P2P</h1>
+
+        <!-- Connection Section -->
+        <div class="connection-section">
+            <span id="connection-status" class="status-badge disconnected">Frakoblet</span>
+            <div id="peer-id-display" style="margin-bottom: 15px; font-weight: bold;"></div>
+
+            <div class="input-group">
+                <label for="username-input">Ditt navn:</label>
+                <input type="text" id="username-input" placeholder="Skriv inn ditt navn" />
+            </div>
+
+            <div class="input-group">
+                <label for="room-input">Rom-kode (la stå tom for å lage nytt rom):</label>
+                <input type="text" id="room-input" placeholder="Skriv rom-kode for å koble til" />
+            </div>
+
+            <button class="btn" id="create-room-btn">Lag nytt rom</button>
+            <button class="btn btn-secondary" id="join-room-btn">Koble til rom</button>
+            <button class="btn btn-small" id="leave-room-btn" style="display: none;">Forlat rom</button>
+            <button class="btn btn-small" id="copy-link-btn" style="display: none;">📋 Kopier rom-link</button>
+
+            <div id="room-link-display" style="display: none;"></div>
+
+            <div class="peers-list" id="peers-list" style="display: none;">
+                <h3>Tilkoblede brukere:</h3>
+                <div id="peers-container"></div>
+            </div>
+        </div>
+
+        <!-- Video URL Input -->
+        <div class="connection-section">
+            <div class="input-group">
+                <label for="video-url-input">Video URL (YouTube, direktelink, etc.):</label>
+                <input type="url" id="video-url-input" placeholder="https://youtube.com/watch?v=... eller direkte video link" />
+                <button class="btn btn-small" id="load-video-btn" style="margin-top: 10px;">Last video fra URL</button>
+            </div>
+            
+            <div class="input-group" style="margin-top: 15px;">
+                <label for="video-file-input">Eller last opp lokal video:</label>
+                <input type="file" id="video-file-input" accept="video/*" style="padding: 8px;" />
+                <button class="btn btn-small" id="load-file-btn" style="margin-top: 10px;">Last opp video</button>
+            </div>
+        </div>
+
+        <div class="grid-layout">
+            <!-- Video Player -->
+            <div>
+                <div class="video-container">
+                    <video id="video-player" controls></video>
+                </div>
+
+                <div class="video-controls">
+                    <button class="btn btn-small" id="play-btn">▶️ Spill</button>
+                    <button class="btn btn-small" id="pause-btn">⏸️ Pause</button>
+                    <button class="btn btn-small" id="sync-btn">🔄 Synkroniser</button>
+                </div>
+
+                <!-- Chromecast Button (only on HTTPS) -->
+                <div class="cast-button-container" id="cast-container" style="display: none;">
+                    <google-cast-launcher></google-cast-launcher>
+                    <p style="font-size: 12px; color: #999; margin-top: 5px;">Chromecast krever HTTPS (deploy til server)</p>
+                </div>
+            </div>
+
+            <!-- Chat -->
+            <div>
+                <div class="chat-container">
+                    <div class="chat-messages" id="chat-messages"></div>
+                    <div class="chat-input-group">
+                        <input type="text" id="chat-input" placeholder="Skriv en melding..." />
+                        <button class="btn btn-small" id="send-chat-btn">Send</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="copy-notification" id="copy-notification">
+        Link kopiert til utklippstavle! 📋
+    </div>
+
+    <script>
+        // ===== Global State =====
+        let peer = null;
+        let roomId = null;
+        let hostPeerId = null;
+        let connections = new Map(); // peerId -> DataConnection
+        let username = localStorage.getItem('username') || '';
+        let isHost = false;
+        let audioContext = null;
+        let syncInterval = null;
+
+        const videoPlayer = document.getElementById('video-player');
+        const usernameInput = document.getElementById('username-input');
+        const roomInput = document.getElementById('room-input');
+        const createRoomBtn = document.getElementById('create-room-btn');
+        const joinRoomBtn = document.getElementById('join-room-btn');
+        const leaveRoomBtn = document.getElementById('leave-room-btn');
+        const copyLinkBtn = document.getElementById('copy-link-btn');
+        const connectionStatus = document.getElementById('connection-status');
+        const peerIdDisplay = document.getElementById('peer-id-display');
+        const roomLinkDisplay = document.getElementById('room-link-display');
+        const peersList = document.getElementById('peers-list');
+        const peersContainer = document.getElementById('peers-container');
+        const chatMessages = document.getElementById('chat-messages');
+        const chatInput = document.getElementById('chat-input');
+        const sendChatBtn = document.getElementById('send-chat-btn');
+        const videoUrlInput = document.getElementById('video-url-input');
+        const loadVideoBtn = document.getElementById('load-video-btn');
+        const videoFileInput = document.getElementById('video-file-input');
+        const loadFileBtn = document.getElementById('load-file-btn');
+        const copyNotification = document.getElementById('copy-notification');
+        const castContainer = document.getElementById('cast-container');
+
+        // ===== Initialize =====
+        if (username) {
+            usernameInput.value = username;
+        }
+
+        // Check for room ID in URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlRoomId = urlParams.get('room');
+        if (urlRoomId) {
+            roomInput.value = urlRoomId;
+        }
+
+        // ===== PeerJS Initialization =====
+        function initPeer() {
+            // Use public PeerJS cloud server
+            peer = new Peer({
+                debug: 2,
+                config: {
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' },
+                        {
+                            urls: ['turn:eu-0.turn.peerjs.com:3478', 'turn:us-0.turn.peerjs.com:3478'],
+                            username: 'peerjs',
+                            credential: 'peerjsp'
+                        }
+                    ]
+                }
+            });
+
+            peer.on('open', (id) => {
+                console.log('My peer ID:', id);
+                peerIdDisplay.textContent = `Din Peer ID: ${id}`;
+                updateConnectionStatus('waiting', 'Klar til å koble til');
+            });
+
+            peer.on('connection', (conn) => {
+                console.log('Incoming connection from:', conn.peer);
+                handleConnection(conn);
+            });
+
+            peer.on('error', (err) => {
+                console.error('PeerJS error:', err);
+                alert(`Feil: ${err.type} - ${err.message}`);
+            });
+        }
+
+        // ===== Room Management =====
+        function createRoom() {
+            const name = usernameInput.value.trim();
+            if (!name) {
+                alert('Vennligst skriv inn ditt navn');
+                return;
+            }
+
+            username = name;
+            localStorage.setItem('username', username);
+
+            if (!peer || peer.destroyed) {
+                initPeer();
+                // Wait for peer to be ready
+                peer.on('open', () => {
+                    roomId = peer.id;
+                    hostPeerId = peer.id;
+                    isHost = true;
+                    showRoomInterface();
+                    displayRoomLink();
+                });
+            } else {
+                roomId = peer.id;
+                hostPeerId = peer.id;
+                isHost = true;
+                showRoomInterface();
+                displayRoomLink();
+            }
+        }
+
+        function joinRoom() {
+            const name = usernameInput.value.trim();
+            const room = roomInput.value.trim();
+
+            if (!name) {
+                alert('Vennligst skriv inn ditt navn');
+                return;
+            }
+
+            if (!room) {
+                alert('Vennligst skriv inn rom-kode');
+                return;
+            }
+
+            username = name;
+            localStorage.setItem('username', username);
+            roomId = room;
+            hostPeerId = room;
+
+            if (!peer || peer.destroyed) {
+                initPeer();
+                peer.on('open', () => {
+                    connectToHost();
+                });
+            } else {
+                connectToHost();
+            }
+        }
+
+        function connectToHost() {
+            console.log('Connecting to host:', hostPeerId);
+            const conn = peer.connect(hostPeerId, {
+                metadata: { username }
+            });
+
+            handleConnection(conn);
+            showRoomInterface();
+        }
+
+        function handleConnection(conn) {
+            connections.set(conn.peer, conn);
+
+            conn.on('open', () => {
+                console.log('Connection opened with:', conn.peer);
+                
+                // Send join message
+                conn.send({
+                    type: 'user_joined',
+                    username: username,
+                    peerId: peer.id
+                });
+
+                updatePeersList();
+                updateConnectionStatus('connected', 'Tilkoblet');
+            });
+
+            conn.on('data', (data) => {
+                handleIncomingData(data, conn);
+            });
+
+            conn.on('close', () => {
+                console.log('Connection closed:', conn.peer);
+                connections.delete(conn.peer);
+                updatePeersList();
+                
+                if (connections.size === 0 && !isHost) {
+                    updateConnectionStatus('disconnected', 'Frakoblet fra rom');
+                }
+            });
+
+            conn.on('error', (err) => {
+                console.error('Connection error:', err);
+            });
+        }
+
+        function handleIncomingData(data, conn) {
+            console.log('Received data:', data);
+
+            switch (data.type) {
+                case 'user_joined':
+                    addChatMessage('system', `${data.username} koblet til!`);
+                    updatePeersList();
+                    
+                    // If host, share current video state
+                    if (isHost && videoPlayer.src) {
+                        conn.send({
+                            type: 'video_state',
+                            url: videoPlayer.src,
+                            currentTime: videoPlayer.currentTime,
+                            paused: videoPlayer.paused
+                        });
+                    }
+                    
+                    // Send peer list to new user
+                    conn.send({
+                        type: 'peers_list',
+                        peers: Array.from(connections.keys()),
+                        hostPeerId: hostPeerId
+                    });
+                    break;
+
+                case 'peers_list':
+                    // Connect to other peers if not already connected
+                    data.peers.forEach(peerId => {
+                        if (peerId !== peer.id && !connections.has(peerId)) {
+                            const newConn = peer.connect(peerId, {
+                                metadata: { username }
+                            });
+                            handleConnection(newConn);
+                        }
+                    });
+                    break;
+
+                case 'chat_message':
+                    addChatMessage(data.username, data.message, data.timestamp);
+                    break;
+
+                case 'video_state':
+                    loadVideo(data.url);
+                    setTimeout(() => {
+                        videoPlayer.currentTime = data.currentTime;
+                        if (!data.paused) {
+                            videoPlayer.play();
+                        }
+                    }, 500);
+                    break;
+
+                case 'play':
+                    videoPlayer.currentTime = data.currentTime || videoPlayer.currentTime;
+                    videoPlayer.play();
+                    break;
+
+                case 'pause':
+                    videoPlayer.currentTime = data.currentTime || videoPlayer.currentTime;
+                    videoPlayer.pause();
+                    break;
+
+                case 'seek':
+                    videoPlayer.currentTime = data.currentTime;
+                    break;
+
+                case 'sync':
+                    // Sync to sender's time
+                    if (!isHost) {
+                        videoPlayer.currentTime = data.currentTime;
+                        if (data.paused) {
+                            videoPlayer.pause();
+                        } else {
+                            videoPlayer.play();
+                        }
+                    }
+                    break;
+            }
+        }
+
+        function broadcastToAllPeers(data) {
+            connections.forEach((conn) => {
+                if (conn.open) {
+                    conn.send(data);
+                }
+            });
+        }
+
+        // ===== UI Updates =====
+        function updateConnectionStatus(status, text) {
+            connectionStatus.className = `status-badge ${status}`;
+            connectionStatus.textContent = text;
+        }
+
+        function showRoomInterface() {
+            createRoomBtn.style.display = 'none';
+            joinRoomBtn.style.display = 'none';
+            leaveRoomBtn.style.display = 'inline-block';
+            copyLinkBtn.style.display = 'inline-block';
+            peersList.style.display = 'block';
+            roomInput.disabled = true;
+            usernameInput.disabled = true;
+        }
+
+        function displayRoomLink() {
+            const link = `${window.location.origin}${window.location.pathname}?room=${roomId}`;
+            roomLinkDisplay.textContent = link;
+            roomLinkDisplay.style.display = 'block';
+        }
+
+        function updatePeersList() {
+            peersContainer.innerHTML = '';
+            
+            // Add self
+            const selfItem = document.createElement('div');
+            selfItem.className = 'peer-item';
+            selfItem.innerHTML = `
+                <div class="peer-status"></div>
+                <div>${username} (deg)${isHost ? ' 👑' : ''}</div>
+            `;
+            peersContainer.appendChild(selfItem);
+
+            // Add connected peers
+            connections.forEach((conn, peerId) => {
+                if (conn.open) {
+                    const peerItem = document.createElement('div');
+                    peerItem.className = 'peer-item';
+                    const peerUsername = conn.metadata?.username || 'Ukjent';
+                    peerItem.innerHTML = `
+                        <div class="peer-status"></div>
+                        <div>${peerUsername}${peerId === hostPeerId ? ' 👑' : ''}</div>
+                    `;
+                    peersContainer.appendChild(peerItem);
+                }
+            });
+        }
+
+        // ===== Chat =====
+        function addChatMessage(username, message, timestamp) {
+            const messageDiv = document.createElement('div');
+            const isOwn = username === usernameInput.value.trim();
+            messageDiv.className = `message ${isOwn ? 'own' : ''} ${username === 'system' ? 'system' : ''}`;
+
+            const time = timestamp ? new Date(timestamp).toLocaleTimeString('no-NO', { hour: '2-digit', minute: '2-digit' }) : new Date().toLocaleTimeString('no-NO', { hour: '2-digit', minute: '2-digit' });
+
+            if (username === 'system') {
+                messageDiv.innerHTML = `
+                    <div style="color: #999; font-style: italic;">${message}</div>
+                `;
+            } else {
+                messageDiv.innerHTML = `
+                    <div class="username">${username}<span class="timestamp">${time}</span></div>
+                    <div>${message}</div>
+                `;
+            }
+
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        function sendChatMessage() {
+            const message = chatInput.value.trim();
+            if (!message) return;
+
+            const chatData = {
+                type: 'chat_message',
+                username: username,
+                message: message,
+                timestamp: Date.now()
+            };
+
+            addChatMessage(username, message, chatData.timestamp);
+            broadcastToAllPeers(chatData);
+
+            chatInput.value = '';
+        }
+
+        // ===== Video Controls =====
+        function loadVideo(url) {
+            let videoUrl = url;
+
+            // Handle different URL types
+            if (url.includes('youtube.com/watch') || url.includes('youtu.be/')) {
+                // Extract video ID and create embed URL
+                let videoId;
+                if (url.includes('youtube.com/watch')) {
+                    videoId = new URL(url).searchParams.get('v');
+                } else {
+                    videoId = url.split('youtu.be/')[1].split('?')[0];
+                }
+                
+                // Use YouTube embed (requires iframe - not implemented yet)
+                alert('YouTube krever iframe embed. Bruk direkte .mp4/.webm linker, eller last opp lokal fil.');
+                return;
+            } else if (url.includes('goojara.to')) {
+                alert('goojara.to kan ikke embeddes pga CORS-beskyttelse. Last ned videoen og bruk "Last opp video" i stedet.');
+                return;
+            }
+
+            // Direct video URLs
+            videoPlayer.src = videoUrl;
+            videoPlayer.load();
+
+            addChatMessage('system', `Video lastet: ${videoUrl.substring(0, 50)}...`);
+
+            // Broadcast video load to all peers if host
+            if (isHost) {
+                broadcastToAllPeers({
+                    type: 'video_state',
+                    url: videoUrl,
+                    currentTime: 0,
+                    paused: true
+                });
+            }
+        }
+
+        function loadLocalVideo(file) {
+            if (!file || !file.type.startsWith('video/')) {
+                alert('Vennligst velg en gyldig videofil');
+                return;
+            }
+
+            // Create blob URL for local file
+            const blobUrl = URL.createObjectURL(file);
+            videoPlayer.src = blobUrl;
+            videoPlayer.load();
+
+            addChatMessage('system', `Lokal video lastet: ${file.name}`);
+
+            // Note: Cannot share blob URLs with peers (local only)
+            alert('⚠️ Lokal video kan kun sees av deg. For å dele med andre, last opp til en server (f.eks. Dropbox/Google Drive) og del linken.');
+        }
+
+        // ===== Video Sync =====
+        function startSyncInterval() {
+            if (syncInterval) clearInterval(syncInterval);
+            
+            syncInterval = setInterval(() => {
+                if (isHost && videoPlayer.src) {
+                    broadcastToAllPeers({
+                        type: 'sync',
+                        currentTime: videoPlayer.currentTime,
+                        paused: videoPlayer.paused
+                    });
+                }
+            }, 2000); // Sync every 2 seconds
+        }
+
+        // ===== Event Listeners =====
+        createRoomBtn.addEventListener('click', createRoom);
+        joinRoomBtn.addEventListener('click', joinRoom);
+
+        leaveRoomBtn.addEventListener('click', () => {
+            connections.forEach(conn => conn.close());
+            connections.clear();
+            if (peer) peer.destroy();
+            location.reload();
+        });
+
+        copyLinkBtn.addEventListener('click', () => {
+            const link = `${window.location.origin}${window.location.pathname}?room=${roomId}`;
+            navigator.clipboard.writeText(link).then(() => {
+                copyNotification.classList.add('show');
+                setTimeout(() => {
+                    copyNotification.classList.remove('show');
+                }, 3000);
+            });
+        });
+
+        loadVideoBtn.addEventListener('click', () => {
+            const url = videoUrlInput.value.trim();
+            if (url) {
+                loadVideo(url);
+            } else {
+                alert('Vennligst skriv inn en video URL');
+            }
+        });
+
+        loadFileBtn.addEventListener('click', () => {
+            const file = videoFileInput.files[0];
+            if (file) {
+                loadLocalVideo(file);
+            } else {
+                alert('Vennligst velg en videofil');
+            }
+        });
+
+        videoFileInput.addEventListener('change', () => {
+            const file = videoFileInput.files[0];
+            if (file) {
+                loadLocalVideo(file);
+            }
+        });
+
+        document.getElementById('play-btn').addEventListener('click', () => {
+            videoPlayer.play();
+            broadcastToAllPeers({
+                type: 'play',
+                currentTime: videoPlayer.currentTime
+            });
+        });
+
+        document.getElementById('pause-btn').addEventListener('click', () => {
+            videoPlayer.pause();
+            broadcastToAllPeers({
+                type: 'pause',
+                currentTime: videoPlayer.currentTime
+            });
+        });
+
+        document.getElementById('sync-btn').addEventListener('click', () => {
+            broadcastToAllPeers({
+                type: 'sync',
+                currentTime: videoPlayer.currentTime,
+                paused: videoPlayer.paused
+            });
+        });
+
+        sendChatBtn.addEventListener('click', sendChatMessage);
+        chatInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                sendChatMessage();
+            }
+        });
+
+        // Video player events
+        videoPlayer.addEventListener('play', () => {
+            if (isHost) {
+                broadcastToAllPeers({ type: 'play', currentTime: videoPlayer.currentTime });
+            }
+            startSyncInterval();
+        });
+
+        videoPlayer.addEventListener('pause', () => {
+            if (isHost) {
+                broadcastToAllPeers({ type: 'pause', currentTime: videoPlayer.currentTime });
+            }
+        });
+
+        videoPlayer.addEventListener('seeked', () => {
+            if (isHost) {
+                broadcastToAllPeers({ type: 'seek', currentTime: videoPlayer.currentTime });
+            }
+        });
+
+        // ===== Google Cast Integration (HTTPS only) =====
+        window['__onGCastApiAvailable'] = function(isAvailable) {
+            if (isAvailable && window.location.protocol === 'https:') {
+                initializeCastApi();
+                castContainer.style.display = 'block';
+            } else if (window.location.protocol !== 'https:') {
+                console.log('Chromecast krever HTTPS - ikke tilgjengelig via file:// protokoll');
+            }
+        };
+
+        function initializeCastApi() {
+            try {
+                const castContext = cast.framework.CastContext.getInstance();
+                castContext.setOptions({
+                    receiverApplicationId: chrome.cast.media.DEFAULT_MEDIA_RECEIVER_APP_ID,
+                    autoJoinPolicy: chrome.cast.AutoJoinPolicy.ORIGIN_SCOPED
+                });
+
+                const player = new cast.framework.RemotePlayer();
+                const playerController = new cast.framework.RemotePlayerController(player);
+
+                playerController.addEventListener(
+                    cast.framework.RemotePlayerEventType.IS_CONNECTED_CHANGED,
+                    function() {
+                        if (player.isConnected) {
+                            console.log('Cast connected');
+                            loadMediaToCast();
+                        } else {
+                            console.log('Cast disconnected');
+                        }
+                    }
+                );
+            } catch (e) {
+                console.error('Cast initialization failed:', e);
+            }
+        }
+
+        function loadMediaToCast() {
+            try {
+                const castSession = cast.framework.CastContext.getInstance().getCurrentSession();
+                if (castSession && videoPlayer.src) {
+                    const mediaInfo = new chrome.cast.media.MediaInfo(videoPlayer.src, 'video/mp4');
+                    const request = new chrome.cast.media.LoadRequest(mediaInfo);
+                    request.currentTime = videoPlayer.currentTime;
+                    
+                    castSession.loadMedia(request).then(
+                        () => console.log('Media loaded to Cast'),
+                        (error) => console.error('Error loading media:', error)
+                    );
+                }
+            } catch (e) {
+                console.error('Cast media loading failed:', e);
+            }
+        }
+
+        // Initialize on load
+        window.addEventListener('load', () => {
+            initPeer();
+        });
+    </script>
+</body>
+</html>

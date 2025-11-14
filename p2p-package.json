@@ -1,0 +1,20 @@
+{
+  "name": "party-stream-p2p",
+  "version": "2.0.0",
+  "description": "Serverless P2P video synchronization app with PeerJS and WebRTC",
+  "main": "p2p-server.js",
+  "scripts": {
+    "start": "node p2p-server.js",
+    "dev": "node p2p-server.js"
+  },
+  "keywords": ["p2p", "webrtc", "peerjs", "video", "sync", "chromecast"],
+  "author": "Snakkaz",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}
