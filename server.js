@@ -194,6 +194,28 @@ io.on('connection', (socket) => {
     console.log(`💬 [${roomId}] ${username}: ${message}`);
   });
 
+  // Leave room
+  socket.on('leave_room', (data) => {
+    const { roomId, username } = data;
+    
+    if (rooms[roomId]) {
+      rooms[roomId].users = rooms[roomId].users.filter(u => u.id !== socket.id);
+      socket.leave(roomId);
+      
+      if (rooms[roomId].users.length === 0) {
+        delete rooms[roomId];
+        console.log(`🗑 Room slettet: ${roomId}`);
+      } else {
+        io.to(roomId).emit('user_left', {
+          username: username,
+          usersInRoom: rooms[roomId].users.length
+        });
+      }
+      
+      console.log(`✗ ${username} forlot room: ${roomId}`);
+    }
+  });
+
   // Disconnect
   socket.on('disconnect', () => {
     // Finn hvilken room brukeren var i

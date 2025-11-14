@@ -489,6 +489,95 @@
         let isSeeking = false;
         let isConnected = false;
 
+        // LocalStorage functions
+        function saveToLocalStorage() {
+            if (username) localStorage.setItem('partystream_username', username);
+            if (currentRoomId) localStorage.setItem('partystream_roomid', currentRoomId);
+        }
+
+        function loadSavedData() {
+            const savedUsername = localStorage.getItem('partystream_username');
+            const savedRoomId = localStorage.getItem('partystream_roomid');
+            
+            if (savedUsername) {
+                document.getElementById('username').value = savedUsername;
+                username = savedUsername;
+            }
+            if (savedRoomId) {
+                document.getElementById('roomId').value = savedRoomId;
+            }
+        }
+
+        // Share room functionality
+        function showShareButton() {
+            const shareUrl = `${window.location.origin}?room=${currentRoomId}`;
+            const shareHTML = `
+                <div class="share-controls" style="margin-top: 10px; display: flex; gap: 10px;">
+                    <button onclick="copyRoomLink()" style="flex: 1; padding: 10px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+                        📋 Kopier invitasjonslenke
+                    </button>
+                    <button onclick="leaveRoom()" style="flex: 1; padding: 10px; background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+                        🚪 Forlat room
+                    </button>
+                </div>
+            `;
+            
+            const statusDiv = document.querySelector('.status-message');
+            const existingShare = document.querySelector('.share-controls');
+            if (!existingShare && statusDiv) {
+                statusDiv.insertAdjacentHTML('afterend', shareHTML);
+            }
+        }
+
+        function copyRoomLink() {
+            const shareUrl = `${window.location.origin}?room=${currentRoomId}`;
+            
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(shareUrl)
+                    .then(() => {
+                        showStatus('✓ Lenke kopiert! Send den til vennen din 🎉', 'success');
+                    })
+                    .catch(() => {
+                        // Fallback
+                        fallbackCopy(shareUrl);
+                    });
+            } else {
+                fallbackCopy(shareUrl);
+            }
+        }
+
+        function fallbackCopy(text) {
+            const textArea = document.createElement('textarea');
+            textArea.value = text;
+            textArea.style.position = 'fixed';
+            textArea.style.left = '-9999px';
+            document.body.appendChild(textArea);
+            textArea.select();
+            try {
+                document.execCommand('copy');
+                showStatus('✓ Lenke kopiert! Send den til vennen din 🎉', 'success');
+            } catch (err) {
+                showStatus(`📋 Kopier denne lenken: ${text}`, 'info');
+            }
+            document.body.removeChild(textArea);
+        }
+
+        function leaveRoom() {
+            if (currentRoomId && username) {
+                socket.emit('leave_room', {
+                    roomId: currentRoomId,
+                    username: username
+                });
+            }
+            
+            // Clear state
+            currentRoomId = null;
+            localStorage.removeItem('partystream_roomid');
+            
+            // Reload page
+            location.reload();
+        }
+
         // Connection status
         socket.on('connect', () => {
             isConnected = true;
@@ -542,7 +631,11 @@
                 username: username
             });
 
+            saveToLocalStorage();
             showStatus(`✓ Koblet til room: ${currentRoomId}`, 'success');
+            
+            // Show share button after joining
+            setTimeout(() => showShareButton(), 500);
         }
 
         // Upload video
@@ -553,23 +646,36 @@
             }
 
             if (!currentRoomId) {
-                showStatus('⚠️ Koble til en room først!', 'error');
+                showStatus('⚠️ Koble til en room først! Skriv navn og Room ID, og klikk "Koble til Room"', 'error');
                 return;
             }
 
-            showStatus('⏳ Laster opp video...', 'info');
+            const file = fileInput.files[0];
+            const maxSize = 500 * 1024 * 1024; // 500MB
+            
+            if (file.size > maxSize) {
+                showStatus('❌ Filen er for stor! Maks 500MB', 'error');
+                return;
+            }
+
+            showStatus('⏳ Laster opp video... Dette kan ta litt tid.', 'info');
 
             const formData = new FormData();
-            formData.append('file', fileInput.files[0]);
+            formData.append('file', file);
 
             fetch('/upload', {
                 method: 'POST',
                 body: formData
             })
-            .then(res => res.json())
+            .then(res => {
+                if (!res.ok) {
+                    throw new Error('Upload failed');
+                }
+                return res.json();
+            })
             .then(data => {
                 if (data.success) {
-                    const videoTitle = fileInput.files[0].name;
+                    const videoTitle = file.name;
                     socket.emit('video_loaded', {
                         roomId: currentRoomId,
                         videoUrl: data.url,
@@ -578,22 +684,25 @@
                     showStatus('✓ Video opplastet og delt med alle!', 'success');
                     fileInput.value = '';
                     document.getElementById('fileLabel').textContent = 'Klikk for å velge video';
+                } else {
+                    throw new Error(data.error || 'Upload failed');
                 }
             })
             .catch(err => {
-                showStatus('❌ Feil ved opplasting: ' + err, 'error');
+                showStatus('❌ Feil ved opplasting: ' + err.message, 'error');
+                console.error('Upload error:', err);
             });
         }
 
         // Toggle play/pause
         function togglePlay() {
             if (!currentRoomId) {
-                showStatus('⚠️ Koble til en room først!', 'error');
+                showStatus('⚠️ Koble til en room først! Skriv navn og Room ID, og klikk "Koble til Room"', 'error');
                 return;
             }
 
             if (!videoPlayer.src) {
-                showStatus('⚠️ Last opp en video først!', 'error');
+                showStatus('⚠️ Last opp en video først! Klikk "Velg video" og deretter "Last opp"', 'error');
                 return;
             }
 
@@ -607,12 +716,12 @@
         // Sync video
         function syncVideo() {
             if (!currentRoomId) {
-                showStatus('⚠️ Koble til en room først!', 'error');
+                showStatus('⚠️ Koble til en room først! Skriv navn og Room ID, og klikk "Koble til Room"', 'error');
                 return;
             }
 
             if (!videoPlayer.src) {
-                showStatus('⚠️ Ingen video å synkronisere!', 'error');
+                showStatus('⚠️ Ingen video å synkronisere! Last opp en video først.', 'error');
                 return;
             }
 
@@ -621,7 +730,7 @@
                 currentTime: videoPlayer.currentTime
             });
             
-            showStatus('🔄 Synkroniserer...', 'info');
+            showStatus('🔄 Synkronisert til ' + Math.floor(videoPlayer.currentTime) + ' sekunder', 'success');
         }
 
         // Send chat message
@@ -632,7 +741,8 @@
             if (!message) return;
 
             if (!currentRoomId) {
-                showStatus('⚠️ Koble til en room først!', 'error');
+                showStatus('⚠️ Koble til en room først! Skriv navn og Room ID, og klikk "Koble til Room"', 'error');
+                chatInput.value = '';
                 return;
             }
 
@@ -749,9 +859,24 @@
             }
         }, 5000);
 
-        // Auto-focus on username input
+        // Auto-focus on username input and load saved data
         window.addEventListener('load', () => {
-            document.getElementById('username').focus();
+            loadSavedData();
+            
+            // Check for room parameter in URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const roomFromUrl = urlParams.get('room');
+            
+            if (roomFromUrl) {
+                document.getElementById('roomId').value = roomFromUrl;
+                currentRoomId = roomFromUrl;
+                showStatus('🎉 Room ID hentet fra lenke! Skriv inn ditt navn og klikk "Koble til Room"', 'info');
+            }
+            
+            const usernameField = document.getElementById('username');
+            if (!usernameField.value) {
+                usernameField.focus();
+            }
         });
     </script>
 </body>
