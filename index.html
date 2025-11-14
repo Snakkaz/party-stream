@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Party Stream 🎉</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎉 Party Stream 🎊</h1>
+            <p class="tagline">Share the vibe, stream the party!</p>
+        </header>
+
+        <main>
+            <section class="stream-controls">
+                <h2>Start Your Stream</h2>
+                <div class="input-group">
+                    <input type="text" id="streamName" placeholder="Enter your party name..." />
+                    <button id="startStream" class="btn-primary">Start Stream</button>
+                </div>
+            </section>
+
+            <section class="active-stream" id="activeStream" style="display: none;">
+                <h2>Now Streaming</h2>
+                <div class="stream-info">
+                    <h3 id="currentStreamName"></h3>
+                    <p class="stream-status">🔴 Live</p>
+                    <div class="viewers">
+                        <span id="viewerCount">0</span> viewers
+                    </div>
+                </div>
+                <div class="stream-display">
+                    <div class="party-animation">
+                        <div class="confetti"></div>
+                        <div class="confetti"></div>
+                        <div class="confetti"></div>
+                        <div class="confetti"></div>
+                        <div class="confetti"></div>
+                    </div>
+                </div>
+                <button id="stopStream" class="btn-secondary">Stop Stream</button>
+            </section>
+
+            <section class="stream-list">
+                <h2>Active Streams</h2>
+                <div id="streamsList">
+                    <p class="no-streams">No active streams yet. Start one!</p>
+                </div>
+            </section>
+        </main>
+
+        <footer>
+            <p>Made with ❤️ for awesome parties</p>
+        </footer>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
