@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎬 Party Stream - Se sammen!</title>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            text-align: center;
+        }
+
+        .header h1 {
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+        }
+
+        .header p {
+            color: #666;
+            font-size: 1.1em;
+        }
+
+        .setup-panel {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+            font-size: 0.95em;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 14px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 1em;
+            transition: border-color 0.3s;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #764ba2;
+            color: white;
+        }
+
+        .btn-success {
+            background: #4caf50;
+            color: white;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 350px;
+            gap: 20px;
+        }
+
+        .video-section {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        .video-section h2 {
+            color: #667eea;
+            margin-bottom: 20px;
+            font-size: 1.5em;
+        }
+
+        .video-container {
+            width: 100%;
+            background: #000;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-bottom: 20px;
+            min-height: 400px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #videoPlayer {
+            width: 100%;
+            height: auto;
+            max-height: 600px;
+        }
+
+        .video-placeholder {
+            color: #666;
+            text-align: center;
+            padding: 50px;
+        }
+
+        .upload-section {
+            margin-bottom: 20px;
+            padding: 20px;
+            background: #f5f7fa;
+            border-radius: 10px;
+            border: 2px dashed #ddd;
+        }
+
+        .upload-section label {
+            display: block;
+            margin-bottom: 10px;
+            font-weight: 600;
+            color: #555;
+        }
+
+        .file-input-wrapper {
+            position: relative;
+            overflow: hidden;
+            display: inline-block;
+            width: 100%;
+            margin-bottom: 10px;
+        }
+
+        .file-input-wrapper input[type=file] {
+            position: absolute;
+            left: -9999px;
+        }
+
+        .file-input-label {
+            display: block;
+            padding: 14px;
+            background: white;
+            color: #667eea;
+            border: 2px solid #667eea;
+            border-radius: 8px;
+            cursor: pointer;
+            text-align: center;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        .file-input-label:hover {
+            background: #667eea;
+            color: white;
+        }
+
+        .controls {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .chat-section {
+            background: white;
+            border-radius: 15px;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+            height: 700px;
+        }
+
+        .chat-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            font-weight: 600;
+            font-size: 1.2em;
+        }
+
+        .users-online {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 10px;
+            border-radius: 5px;
+            margin-top: 10px;
+            font-size: 0.9em;
+        }
+
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            background: #f9f9f9;
+        }
+
+        .message {
+            margin-bottom: 12px;
+            padding: 12px;
+            background: white;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message.system {
+            border-left-color: #999;
+            background: #f5f5f5;
+            font-style: italic;
+            color: #666;
+        }
+
+        .message-user {
+            font-weight: 600;
+            color: #667eea;
+            margin-bottom: 4px;
+        }
+
+        .message-time {
+            font-size: 0.75em;
+            color: #999;
+            margin-left: 8px;
+        }
+
+        .message-text {
+            color: #333;
+            line-height: 1.4;
+        }
+
+        .chat-input {
+            padding: 20px;
+            border-top: 1px solid #e0e0e0;
+            display: flex;
+            gap: 10px;
+            background: white;
+        }
+
+        .chat-input input {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 0.95em;
+        }
+
+        .chat-input input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .chat-input button {
+            padding: 12px 24px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: background 0.3s;
+        }
+
+        .chat-input button:hover {
+            background: #764ba2;
+        }
+
+        .status {
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            font-size: 0.9em;
+            display: none;
+            animation: slideIn 0.3s ease;
+        }
+
+        .status.info {
+            background: #e3f2fd;
+            color: #1565c0;
+            border-left: 4px solid #1565c0;
+        }
+
+        .status.success {
+            background: #e8f5e9;
+            color: #2e7d32;
+            border-left: 4px solid #2e7d32;
+        }
+
+        .status.error {
+            background: #ffebee;
+            color: #c62828;
+            border-left: 4px solid #c62828;
+        }
+
+        .connection-status {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #4caf50;
+            margin-right: 8px;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .connection-status.disconnected {
+            background: #f44336;
+        }
+
+        @media (max-width: 968px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+
+            .chat-section {
+                height: 500px;
+            }
+
+            .header h1 {
+                font-size: 1.8em;
+            }
+        }
+
+        /* Loading spinner */
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>🎬 Party Stream</h1>
+            <p>Se på serier og filmer sammen med venner - helt synkronisert!</p>
+            <p style="margin-top: 10px; font-size: 0.9em;">
+                <span class="connection-status" id="connectionStatus"></span>
+                <span id="connectionText">Kobler til...</span>
+            </p>
+        </div>
+
+        <!-- Setup Panel -->
+        <div class="setup-panel">
+            <div class="form-group">
+                <label for="username">🙋 Ditt navn:</label>
+                <input type="text" id="username" placeholder="F.eks. Stian" value="">
+            </div>
+            <div class="form-group">
+                <label for="roomId">🔑 Room ID (del dette med venner for å se sammen):</label>
+                <input type="text" id="roomId" placeholder="F.eks. filmkveld123" value="">
+            </div>
+            <div class="form-group">
+                <button class="btn btn-primary" onclick="joinRoom()">Koble til Room</button>
+            </div>
+            <div id="status" class="status"></div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Video Section -->
+            <div class="video-section">
+                <h2 id="videoTitle">📺 Ingen video lastet ennå</h2>
+
+                <div class="upload-section">
+                    <label>📁 Last opp video fra din PC (MP4, WebM, MKV):</label>
+                    <div class="file-input-wrapper">
+                        <input type="file" id="videoFile" accept="video/*">
+                        <label for="videoFile" class="file-input-label">
+                            <span id="fileLabel">Klikk for å velge video</span>
+                        </label>
+                    </div>
+                    <button class="btn btn-success" onclick="uploadVideo()">⬆️ Last opp og start avspilling</button>
+                </div>
+
+                <div class="video-container">
+                    <video id="videoPlayer" controls style="display: none;"></video>
+                    <div class="video-placeholder" id="videoPlaceholder">
+                        <h3>👆 Last opp en video for å starte</h3>
+                        <p style="margin-top: 10px; color: #999;">Videoen vil bli synkronisert med alle i rommet</p>
+                    </div>
+                </div>
+
+                <div class="controls">
+                    <button class="btn btn-primary" onclick="togglePlay()">▶️ Play / ⏸️ Pause</button>
+                    <button class="btn btn-secondary" onclick="syncVideo()">🔄 Sync med andre</button>
+                </div>
+            </div>
+
+            <!-- Chat Section -->
+            <div class="chat-section">
+                <div class="chat-header">
+                    💬 Chat
+                    <div class="users-online" id="usersOnline">
+                        <span id="userCount">0</span> brukere online
+                    </div>
+                </div>
+                <div class="chat-messages" id="chatMessages">
+                    <div class="message system">
+                        <div class="message-text">👋 Velkommen til Party Stream! Koble til en room for å starte.</div>
+                    </div>
+                </div>
+                <div class="chat-input">
+                    <input type="text" id="chatInput" placeholder="Skriv en melding..." onkeypress="if(event.key==='Enter') sendMessage()">
+                    <button onclick="sendMessage()">Send</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Socket.io connection
+        const socket = io();
+        const videoPlayer = document.getElementById('videoPlayer');
+        const videoPlaceholder = document.getElementById('videoPlaceholder');
+        const fileInput = document.getElementById('videoFile');
+        
+        let currentRoomId = null;
+        let username = '';
+        let isSeeking = false;
+        let isConnected = false;
+
+        // Connection status
+        socket.on('connect', () => {
+            isConnected = true;
+            updateConnectionStatus(true);
+            console.log('✓ Tilkoblet server');
+        });
+
+        socket.on('disconnect', () => {
+            isConnected = false;
+            updateConnectionStatus(false);
+            showStatus('⚠️ Mistet tilkobling til server', 'error');
+        });
+
+        function updateConnectionStatus(connected) {
+            const statusDot = document.getElementById('connectionStatus');
+            const statusText = document.getElementById('connectionText');
+            
+            if (connected) {
+                statusDot.classList.remove('disconnected');
+                statusText.textContent = 'Tilkoblet';
+            } else {
+                statusDot.classList.add('disconnected');
+                statusText.textContent = 'Frakoblet';
+            }
+        }
+
+        // File input change
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files[0]) {
+                document.getElementById('fileLabel').textContent = e.target.files[0].name;
+            }
+        });
+
+        // Join room
+        function joinRoom() {
+            username = document.getElementById('username').value.trim();
+            currentRoomId = document.getElementById('roomId').value.trim();
+
+            if (!username) {
+                showStatus('⚠️ Vennligst skriv inn ditt navn', 'error');
+                return;
+            }
+
+            if (!currentRoomId) {
+                showStatus('⚠️ Vennligst skriv inn en Room ID', 'error');
+                return;
+            }
+
+            socket.emit('join_room', {
+                roomId: currentRoomId,
+                username: username
+            });
+
+            showStatus(`✓ Koblet til room: ${currentRoomId}`, 'success');
+        }
+
+        // Upload video
+        function uploadVideo() {
+            if (!fileInput.files[0]) {
+                showStatus('⚠️ Velg en video først!', 'error');
+                return;
+            }
+
+            if (!currentRoomId) {
+                showStatus('⚠️ Koble til en room først!', 'error');
+                return;
+            }
+
+            showStatus('⏳ Laster opp video...', 'info');
+
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+
+            fetch('/upload', {
+                method: 'POST',
+                body: formData
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    const videoTitle = fileInput.files[0].name;
+                    socket.emit('video_loaded', {
+                        roomId: currentRoomId,
+                        videoUrl: data.url,
+                        videoTitle: videoTitle
+                    });
+                    showStatus('✓ Video opplastet og delt med alle!', 'success');
+                    fileInput.value = '';
+                    document.getElementById('fileLabel').textContent = 'Klikk for å velge video';
+                }
+            })
+            .catch(err => {
+                showStatus('❌ Feil ved opplasting: ' + err, 'error');
+            });
+        }
+
+        // Toggle play/pause
+        function togglePlay() {
+            if (!currentRoomId) {
+                showStatus('⚠️ Koble til en room først!', 'error');
+                return;
+            }
+
+            if (!videoPlayer.src) {
+                showStatus('⚠️ Last opp en video først!', 'error');
+                return;
+            }
+
+            if (videoPlayer.paused) {
+                socket.emit('play', currentRoomId);
+            } else {
+                socket.emit('pause', currentRoomId);
+            }
+        }
+
+        // Sync video
+        function syncVideo() {
+            if (!currentRoomId) {
+                showStatus('⚠️ Koble til en room først!', 'error');
+                return;
+            }
+
+            if (!videoPlayer.src) {
+                showStatus('⚠️ Ingen video å synkronisere!', 'error');
+                return;
+            }
+
+            socket.emit('seek', {
+                roomId: currentRoomId,
+                currentTime: videoPlayer.currentTime
+            });
+            
+            showStatus('🔄 Synkroniserer...', 'info');
+        }
+
+        // Send chat message
+        function sendMessage() {
+            const chatInput = document.getElementById('chatInput');
+            const message = chatInput.value.trim();
+
+            if (!message) return;
+
+            if (!currentRoomId) {
+                showStatus('⚠️ Koble til en room først!', 'error');
+                return;
+            }
+
+            socket.emit('send_message', {
+                roomId: currentRoomId,
+                username: username,
+                message: message
+            });
+
+            chatInput.value = '';
+        }
+
+        // Socket events
+        socket.on('user_joined', (data) => {
+            addChatMessage('SYSTEM', `${data.username} koblet til`, '', true);
+            updateUserCount(data.usersInRoom);
+        });
+
+        socket.on('user_left', (data) => {
+            addChatMessage('SYSTEM', `${data.username} forlot rommet`, '', true);
+            updateUserCount(data.usersInRoom);
+        });
+
+        socket.on('video_changed', (data) => {
+            document.getElementById('videoTitle').textContent = '📺 ' + data.videoTitle;
+            videoPlayer.src = data.videoUrl;
+            videoPlayer.currentTime = data.currentTime || 0;
+            videoPlayer.style.display = 'block';
+            videoPlaceholder.style.display = 'none';
+            showStatus('✓ Video endret: ' + data.videoTitle, 'success');
+        });
+
+        socket.on('play_video', (data) => {
+            videoPlayer.play().catch(err => {
+                console.log('Autoplay blokkert:', err);
+                showStatus('⚠️ Klikk på play-knappen for å starte', 'info');
+            });
+        });
+
+        socket.on('pause_video', () => {
+            videoPlayer.pause();
+        });
+
+        socket.on('seek_video', (data) => {
+            isSeeking = true;
+            videoPlayer.currentTime = data.currentTime;
+            setTimeout(() => { isSeeking = false; }, 500);
+        });
+
+        socket.on('receive_message', (data) => {
+            addChatMessage(data.username, data.message, data.timestamp, false);
+        });
+
+        // Helper functions
+        function addChatMessage(user, message, time = '', isSystem = false) {
+            const chatMessages = document.getElementById('chatMessages');
+            const msgEl = document.createElement('div');
+            msgEl.className = isSystem ? 'message system' : 'message';
+            
+            if (isSystem) {
+                msgEl.innerHTML = `<div class="message-text">${message}</div>`;
+            } else {
+                msgEl.innerHTML = `
+                    <div class="message-user">
+                        ${user}
+                        ${time ? `<span class="message-time">${time}</span>` : ''}
+                    </div>
+                    <div class="message-text">${escapeHtml(message)}</div>
+                `;
+            }
+            
+            chatMessages.appendChild(msgEl);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        function updateUserCount(count) {
+            document.getElementById('userCount').textContent = count;
+        }
+
+        function showStatus(message, type = 'info') {
+            const status = document.getElementById('status');
+            status.textContent = message;
+            status.className = `status ${type}`;
+            status.style.display = 'block';
+            
+            setTimeout(() => {
+                status.style.display = 'none';
+            }, 5000);
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Video event listeners
+        videoPlayer.addEventListener('seeked', () => {
+            if (!isSeeking && currentRoomId) {
+                socket.emit('update_time', {
+                    roomId: currentRoomId,
+                    currentTime: videoPlayer.currentTime
+                });
+            }
+        });
+
+        // Send current time periodically for sync
+        setInterval(() => {
+            if (currentRoomId && !videoPlayer.paused && videoPlayer.src) {
+                socket.emit('update_time', {
+                    roomId: currentRoomId,
+                    currentTime: videoPlayer.currentTime
+                });
+            }
+        }, 5000);
+
+        // Auto-focus on username input
+        window.addEventListener('load', () => {
+            document.getElementById('username').focus();
+        });
+    </script>
+</body>
+</html>
