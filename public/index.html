@@ -395,6 +395,80 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+
+        /* Fade animation for typing indicator */
+        @keyframes fade {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* User list styles */
+        .user-list {
+            padding: 10px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #dee2e6;
+            max-height: 120px;
+            overflow-y: auto;
+        }
+
+        .user-list small {
+            color: #666;
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+        }
+
+        #activeUsers {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .user-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 5px 12px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 15px;
+            font-size: 0.85em;
+            font-weight: 500;
+            box-shadow: 0 2px 5px rgba(102, 126, 234, 0.3);
+        }
+
+        .user-badge::before {
+            content: '';
+            width: 8px;
+            height: 8px;
+            background: #4ade80;
+            border-radius: 50%;
+            margin-right: 6px;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        /* Stream link input */
+        .stream-link-section {
+            margin-top: 15px;
+            padding: 15px;
+            background: #f0f4ff;
+            border-radius: 8px;
+            border: 2px dashed #667eea;
+        }
+
+        .stream-link-section label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #667eea;
+        }
+
+        .stream-link-section input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #667eea;
+            border-radius: 8px;
+            font-size: 0.95em;
+        }
     </style>
 </head>
 <body>
@@ -440,6 +514,16 @@
                         </label>
                     </div>
                     <button class="btn btn-success" onclick="uploadVideo()">⬆️ Last opp og start avspilling</button>
+                    
+                    <!-- OR Stream from URL -->
+                    <div class="stream-link-section">
+                        <label>🔗 Eller lim inn direkte video-lenke:</label>
+                        <input type="text" id="streamUrl" placeholder="F.eks. https://example.com/video.mp4 eller YouTube embed URL">
+                        <button class="btn btn-primary" onclick="loadStreamUrl()" style="margin-top: 10px;">▶️ Last stream</button>
+                        <p style="margin-top: 10px; font-size: 0.9em;">
+                            💡 Tips: For YouTube, bruk embed URL: https://www.youtube.com/embed/VIDEO_ID
+                        </p>
+                    </div>
                 </div>
 
                 <div class="video-container">
@@ -464,6 +548,15 @@
                         <span id="userCount">0</span> brukere online
                     </div>
                 </div>
+                
+                <!-- User List -->
+                <div class="user-list" id="userList" style="padding: 10px; background: #f8f9fa; border-bottom: 1px solid #dee2e6; max-height: 100px; overflow-y: auto;">
+                    <small style="color: #666; display: block; margin-bottom: 5px;">👥 Aktive brukere:</small>
+                    <div id="activeUsers" style="display: flex; flex-wrap: wrap; gap: 5px;">
+                        <span style="color: #999; font-size: 0.9em;">Ingen brukere ennå...</span>
+                    </div>
+                </div>
+                
                 <div class="chat-messages" id="chatMessages">
                     <div class="message system">
                         <div class="message-text">👋 Velkommen til Party Stream! Koble til en room for å starte.</div>
@@ -674,24 +767,54 @@
                 return res.json();
             })
             .then(data => {
-                if (data.success) {
-                    const videoTitle = file.name;
-                    socket.emit('video_loaded', {
-                        roomId: currentRoomId,
-                        videoUrl: data.url,
-                        videoTitle: videoTitle
-                    });
-                    showStatus('✓ Video opplastet og delt med alle!', 'success');
-                    fileInput.value = '';
-                    document.getElementById('fileLabel').textContent = 'Klikk for å velge video';
-                } else {
-                    throw new Error(data.error || 'Upload failed');
-                }
+                socket.emit('video_loaded', {
+                    roomId: currentRoomId,
+                    videoUrl: data.url,
+                    videoTitle: file.name
+                });
+                showStatus('✓ Video lastet opp! Alle i rommet kan nå se den.', 'success');
             })
             .catch(err => {
-                showStatus('❌ Feil ved opplasting: ' + err.message, 'error');
                 console.error('Upload error:', err);
+                showStatus('❌ Opplasting feilet. Prøv igjen.', 'error');
             });
+        }
+
+        // Load stream from URL
+        function loadStreamUrl() {
+            const streamUrl = document.getElementById('streamUrl').value.trim();
+            
+            if (!streamUrl) {
+                showStatus('⚠️ Lim inn en video-URL først!', 'error');
+                return;
+            }
+
+            if (!currentRoomId) {
+                showStatus('⚠️ Koble til en room først! Skriv navn og Room ID, og klikk "Koble til Room"', 'error');
+                return;
+            }
+
+            // Extract video title from URL
+            let videoTitle = 'Stream video';
+            try {
+                const url = new URL(streamUrl);
+                if (url.hostname.includes('youtube')) {
+                    videoTitle = 'YouTube Video';
+                } else {
+                    videoTitle = url.pathname.split('/').pop() || 'Stream video';
+                }
+            } catch (e) {
+                videoTitle = 'Stream video';
+            }
+
+            socket.emit('video_loaded', {
+                roomId: currentRoomId,
+                videoUrl: streamUrl,
+                videoTitle: videoTitle
+            });
+
+            showStatus('✓ Stream lastet! Alle i rommet kan nå se den.', 'success');
+            document.getElementById('streamUrl').value = '';
         }
 
         // Toggle play/pause
@@ -752,18 +875,51 @@
                 message: message
             });
 
+            // Stop typing indicator
+            socket.emit('user_stop_typing', {
+                roomId: currentRoomId,
+                username: username
+            });
+
             chatInput.value = '';
         }
 
+        // Handle typing in chat input
+        const chatInput = document.getElementById('chatInput');
+        let chatTypingTimeout;
+        
+        chatInput.addEventListener('input', () => {
+            if (!currentRoomId || !username) return;
+            
+            // Send typing indicator
+            socket.emit('user_typing', {
+                roomId: currentRoomId,
+                username: username
+            });
+            
+            // Clear previous timeout
+            clearTimeout(chatTypingTimeout);
+            
+            // Stop typing after 2 seconds of no input
+            chatTypingTimeout = setTimeout(() => {
+                socket.emit('user_stop_typing', {
+                    roomId: currentRoomId,
+                    username: username
+                });
+            }, 2000);
+        });
+
         // Socket events
         socket.on('user_joined', (data) => {
-            addChatMessage('SYSTEM', `${data.username} koblet til`, '', true);
+            addChatMessage('SYSTEM', `${data.username} ble med i rommet! 🎉`, '', true);
             updateUserCount(data.usersInRoom);
+            updateUserList(data.users);
         });
 
         socket.on('user_left', (data) => {
             addChatMessage('SYSTEM', `${data.username} forlot rommet`, '', true);
             updateUserCount(data.usersInRoom);
+            updateUserList(data.users);
         });
 
         socket.on('video_changed', (data) => {
@@ -794,9 +950,74 @@
 
         socket.on('receive_message', (data) => {
             addChatMessage(data.username, data.message, data.timestamp, false);
+            // Stop typing indicator when message received
+            removeTypingIndicator(data.username);
+        });
+
+        // Typing indicators
+        socket.on('user_typing', (data) => {
+            showTypingIndicator(data.username);
+        });
+
+        socket.on('user_stop_typing', (data) => {
+            removeTypingIndicator(data.username);
         });
 
         // Helper functions
+        function updateUserList(users) {
+            const activeUsersDiv = document.getElementById('activeUsers');
+            
+            if (!users || users.length === 0) {
+                activeUsersDiv.innerHTML = '<span style="color: #999; font-size: 0.9em;">Ingen brukere ennå...</span>';
+                return;
+            }
+            
+            activeUsersDiv.innerHTML = users.map(user => `
+                <span style="display: inline-flex; align-items: center; padding: 4px 10px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: 12px; font-size: 0.85em; font-weight: 500;">
+                    <span style="width: 8px; height: 8px; background: #4ade80; border-radius: 50%; margin-right: 6px; animation: pulse 2s ease-in-out infinite;"></span>
+                    ${user.username}
+                </span>
+            `).join('');
+        }
+
+        let typingTimeout;
+        let typingUsers = new Set();
+
+        function showTypingIndicator(username) {
+            typingUsers.add(username);
+            updateTypingIndicator();
+        }
+
+        function removeTypingIndicator(username) {
+            typingUsers.delete(username);
+            updateTypingIndicator();
+        }
+
+        function updateTypingIndicator() {
+            const chatMessages = document.getElementById('chatMessages');
+            let typingEl = document.getElementById('typingIndicator');
+            
+            if (typingUsers.size > 0) {
+                const names = Array.from(typingUsers).join(', ');
+                const text = typingUsers.size === 1 
+                    ? `${names} skriver...` 
+                    : `${names} skriver...`;
+                
+                if (!typingEl) {
+                    typingEl = document.createElement('div');
+                    typingEl.id = 'typingIndicator';
+                    typingEl.style.cssText = 'padding: 8px 12px; color: #999; font-size: 0.9em; font-style: italic;';
+                    chatMessages.appendChild(typingEl);
+                }
+                typingEl.innerHTML = `
+                    <span style="display: inline-block; animation: fade 1.5s ease-in-out infinite;">✍️ ${text}</span>
+                `;
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            } else if (typingEl) {
+                typingEl.remove();
+            }
+        }
+
         function addChatMessage(user, message, time = '', isSystem = false) {
             const chatMessages = document.getElementById('chatMessages');
             const msgEl = document.createElement('div');

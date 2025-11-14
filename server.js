@@ -97,6 +97,7 @@ io.on('connection', (socket) => {
     io.to(roomId).emit('user_joined', {
       username: username,
       usersInRoom: rooms[roomId].users.length,
+      users: rooms[roomId].users,
       roomState: rooms[roomId]
     });
 
@@ -194,6 +195,17 @@ io.on('connection', (socket) => {
     console.log(`💬 [${roomId}] ${username}: ${message}`);
   });
 
+  // Typing indicators
+  socket.on('user_typing', (data) => {
+    const { roomId, username } = data;
+    socket.to(roomId).emit('user_typing', { username });
+  });
+
+  socket.on('user_stop_typing', (data) => {
+    const { roomId, username } = data;
+    socket.to(roomId).emit('user_stop_typing', { username });
+  });
+
   // Leave room
   socket.on('leave_room', (data) => {
     const { roomId, username } = data;
@@ -208,7 +220,8 @@ io.on('connection', (socket) => {
       } else {
         io.to(roomId).emit('user_left', {
           username: username,
-          usersInRoom: rooms[roomId].users.length
+          usersInRoom: rooms[roomId].users.length,
+          users: rooms[roomId].users
         });
       }
       
@@ -229,7 +242,8 @@ io.on('connection', (socket) => {
       } else if (user) {
         io.to(roomId).emit('user_left', {
           username: user.username,
-          usersInRoom: rooms[roomId].users.length
+          usersInRoom: rooms[roomId].users.length,
+          users: rooms[roomId].users
         });
       }
     }
